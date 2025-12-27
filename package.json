@@ -15,8 +15,12 @@
     "cli",
     "dropcode"
   ],
-  "author": "",
+  "author": "zaur18@live.ru",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Zaur-Lumanov/dropcode-cli.git"
+  },
   "engines": {
     "node": ">=14.0.0"
   },
