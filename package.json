@@ -1,6 +1,6 @@
 {
   "name": "dropcode",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "CLI tool for dropcode",
   "main": "dist/index.js",
   "bin": {
@@ -38,4 +38,3 @@
     "open": "^9.1.0"
   }
 }
-
