@@ -53,3 +53,26 @@ package-lock.json
 .yarn/versions
 .pnp.*
 
+# Temporary files
+*.tmp
+*.temp
+.cache/
+.tmp/
+tmp/
+temp/
+
+# Optional eslint cache
+.eslintcache
+
+# Optional REPL history
+.node_repl_history
+
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variable files
+.env.test
+.env.production
+
+# parcel-bundler cache
+.parcel-cache

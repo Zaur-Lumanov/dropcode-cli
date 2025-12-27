@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
 import { program } from 'commander';
-import { readFileSync, createWriteStream } from 'fs';
-import { join } from 'path';
+import { readFileSync, createWriteStream, existsSync } from 'fs';
+import { join, extname, basename } from 'path';
 import axios from 'axios';
 import open from 'open';
 import { cwd } from 'process';
+import * as readline from 'readline';
 
 // Read version from package.json
 const packageJson = JSON.parse(
@@ -112,6 +113,137 @@ function getFilenameFromUrl(url: string, snippetId: string): string {
   }
 }
 
+/**
+ * Checks if a file exists in the current directory
+ */
+function fileExists(filename: string): boolean {
+  const filePath = join(cwd(), filename);
+  return existsSync(filePath);
+}
+
+/**
+ * Generates a filename with an incremented number (e.g., App.tsx -> App (2).tsx)
+ */
+function generateNumberedFilename(originalFilename: string, directory: string = cwd()): string {
+  const ext = extname(originalFilename);
+  const nameWithoutExt = basename(originalFilename, ext);
+  let counter = 2;
+  let newFilename = `${nameWithoutExt} (${counter})${ext}`;
+  
+  while (existsSync(join(directory, newFilename))) {
+    counter++;
+    newFilename = `${nameWithoutExt} (${counter})${ext}`;
+  }
+  
+  return newFilename;
+}
+
+/**
+ * Creates a readline interface for user input
+ */
+function createReadlineInterface(): readline.Interface {
+  return readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+}
+
+/**
+ * Prompts user for input
+ */
+function question(rl: readline.Interface, query: string): Promise<string> {
+  return new Promise((resolve) => {
+    rl.question(query, resolve);
+  });
+}
+
+/**
+ * Handles file name conflict by prompting user for action
+ */
+async function handleFileNameConflict(originalFilename: string): Promise<string | null> {
+  const rl = createReadlineInterface();
+  const autoNumberedName = generateNumberedFilename(originalFilename);
+  
+  try {
+    while (true) {
+      console.log(`\nFile "${originalFilename}" already exists in this directory.`);
+      console.log('What would you like to do?');
+      console.log('  1. Replace the existing file');
+      console.log(`  2. Save as "${autoNumberedName}"`);
+      console.log('  3. Enter a custom filename');
+      console.log('  4. Cancel');
+      
+      const answer = await question(rl, '\nEnter your choice (1-4): ');
+      const choice = answer.trim();
+      
+      switch (choice) {
+        case '1':
+          rl.close();
+          return originalFilename;
+          
+        case '2':
+          rl.close();
+          return autoNumberedName;
+          
+        case '3': {
+          let firstAttemptName: string | null = null;
+          
+          while (true) {
+            const customName = await question(rl, 'Enter custom filename: ');
+            const trimmedName = customName.trim();
+            
+            if (!trimmedName) {
+              if (firstAttemptName === null) {
+                console.log('Filename cannot be empty. Please try again.');
+                continue;
+              } else {
+                // Empty input after error - return to main menu
+                break;
+              }
+            }
+            
+            if (fileExists(trimmedName)) {
+              if (firstAttemptName === null) {
+                // First attempt with existing file
+                firstAttemptName = trimmedName;
+                console.log(`Error: File "${trimmedName}" already exists.`);
+                console.log('Press Enter to return to main menu, or enter the same filename again to see options for this file.');
+              } else if (trimmedName === firstAttemptName) {
+                // Same name entered again - show options for this file
+                rl.close();
+                return await handleFileNameConflict(trimmedName);
+              } else {
+                // Different name, but also exists - reset and show error
+                firstAttemptName = trimmedName;
+                console.log(`Error: File "${trimmedName}" already exists.`);
+                console.log('Press Enter to return to main menu, or enter the same filename again to see options for this file.');
+              }
+              continue;
+            }
+            
+            // Valid filename that doesn't exist
+            rl.close();
+            return trimmedName;
+          }
+          // Return to main menu (continue outer loop)
+          continue;
+        }
+        
+        case '4':
+          rl.close();
+          return null;
+          
+        default:
+          console.log('Invalid choice. Please enter 1, 2, 3, or 4.');
+          continue;
+      }
+    }
+  } catch (error) {
+    rl.close();
+    throw error;
+  }
+}
+
 program
   .name('dropcode')
   .description('CLI tool for dropcode')
@@ -145,7 +277,19 @@ program
       }
 
       const downloadUrl = fileInfo.file.downloadUrl;
-      const filename = getFilenameFromUrl(downloadUrl, snippetId);
+      let filename = getFilenameFromUrl(downloadUrl, snippetId);
+
+      // Check if file already exists and handle conflict
+      if (fileExists(filename)) {
+        const resolvedFilename = await handleFileNameConflict(filename);
+        
+        if (resolvedFilename === null) {
+          console.log('Download cancelled.');
+          process.exit(0);
+        }
+        
+        filename = resolvedFilename;
+      }
 
       console.log(`Downloading file: ${filename}`);
       console.log(`From: ${downloadUrl}`);
